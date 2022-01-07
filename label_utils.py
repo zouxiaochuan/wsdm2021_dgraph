@@ -5,37 +5,31 @@ import constants
 
 
 def get_label(
-        current_ts, target_ts, bin_size, neg_interval, neg_num):
-    current_bin = current_ts // bin_size
-    target_bins = target_ts // bin_size
-
-    target_bins = np.append(target_bins, current_bin)
+        positive_ts, max_history_ts, max_future_ts, num, bin_size):
     
-    max_target_ts = max(target_ts[-1], current_ts + neg_interval)
-    
-    target_bin_range = np.array(
-        [current_ts - neg_interval, max_target_ts],
-        dtype='int32') // bin_size
+    max_history_bin = max_history_ts // bin_size
+    max_future_bin = max_future_ts // bin_size
 
-    target_bin_range[1] += 1
+    positive_bins = np.unique(positive_ts // bin_size)
 
-    neg_bins = np.arange(target_bin_range[0], target_bin_range[1])
-    neg_labels = np.zeros(len(neg_bins), dtype='float32')
-    neg_labels[target_bins - neg_bins[0]] = 1
-    # neg_labels[current_bin - neg_bins[0]] = 1
-    # neg_bins = np.setdiff1d(neg_bins, target_bins)
+    if len(positive_bins) >= num:
+        return positive_bins[:num], np.ones(num, dtype='float32')
 
-    if len(neg_bins) > neg_num:
-        selected_bins = np.random.choice(
-            np.arange(len(neg_bins)),
-            size=neg_num, replace=False)
+    pos_num = len(positive_bins)
+    neg_num = num - pos_num
+    all_bins = np.arange(max_history_bin, max_future_bin + 1)
+    negative_bins = np.setdiff1d(all_bins, positive_bins)
 
-        neg_bins = neg_bins[selected_bins]
-        neg_labels = neg_labels[selected_bins]
+    if neg_num > len(negative_bins):
+        neg_num = len(negative_bins)
         pass
 
-    label_bins = np.insert(neg_bins, 0, current_bin)
-    label = np.insert(neg_labels, 0, 1)
+    negative_bins = np.random.choice(negative_bins, size=neg_num, replace=False)
+
+    label = np.concatenate((
+        np.ones(len(positive_bins), dtype='float32'),
+        np.zeros(len(negative_bins), dtype='float32')))
+    label_bins = np.concatenate((positive_bins, negative_bins))
 
     return label_bins, label
 

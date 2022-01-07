@@ -73,6 +73,12 @@ class HierarchicalTransformer(torch.nn.Module):
         self.proj_extra_pair = torch.nn.Sequential(
             torch.nn.Linear(config['extra_feat_dim'], config['hidden_size']),
             torch.nn.LayerNorm(config['hidden_size']))
+        self.proj_extra_src = torch.nn.Sequential(
+            torch.nn.Linear(config['extra_feat_dim'], config['hidden_size']),
+            torch.nn.LayerNorm(config['hidden_size']))
+        self.proj_extra_dst = torch.nn.Sequential(
+            torch.nn.Linear(config['extra_feat_dim'], config['hidden_size']),
+            torch.nn.LayerNorm(config['hidden_size']))
 
         self.base_code_trip = torch.nn.Parameter(
             torch.zeros((1, 1, config['hidden_size'])))
@@ -122,7 +128,8 @@ class HierarchicalTransformer(torch.nn.Module):
         return emb
     
     def forward(self, edge_feat, label_feat, trip_feat, trip_mask, pair_feat, pair_mask,
-                src_feat, src_mask, dst_feat, dst_mask, trip_feat_extra_b, pair_feat_extra_b):
+                src_feat, src_mask, dst_feat, dst_mask, trip_feat_extra_b, pair_feat_extra_b,
+                src_feat_extra_b, dst_feat_extra_b):
         '''
         edge_feat: [B, EF]
         label_feat: [B, L, LF]
@@ -137,22 +144,31 @@ class HierarchicalTransformer(torch.nn.Module):
         trip_emb_extra = self.proj_extra_trip(trip_feat_extra_b)
         # trip_emb_extra: [B, C, H]
         pair_emb_extra = self.proj_extra_pair(pair_feat_extra_b)
-
+        src_emb_extra = self.proj_extra_src(src_feat_extra_b)
+        dst_emb_extra = self.proj_extra_dst(dst_feat_extra_b)
+        
         trip_emb = torch.cat((trip_emb, trip_emb_extra[:, :, None, :]), dim=-2)
         pair_emb = torch.cat((pair_emb, pair_emb_extra[:, :, None, :]), dim=-2)
         
         # trip_emb: [B, C, TF, H]
         trip_emb = self.encode_feat(self.trip_feat_encode_layers, trip_emb)
-        trip_emb = self.encode_seq(self.trip_encode_layers, trip_emb, trip_mask, self.base_code_trip)
+        trip_emb = self.encode_seq(
+            self.trip_encode_layers, trip_emb, trip_mask, self.base_code_trip)
 
         pair_emb = self.encode_feat(self.pair_feat_encode_layers, pair_emb)
-        pair_emb = self.encode_seq(self.pair_encode_layers, pair_emb, pair_mask, self.base_code_pair)
+        pair_emb = self.encode_seq(
+            self.pair_encode_layers, pair_emb, pair_mask, self.base_code_pair)
+
+        src_emb = torch.cat((src_emb, src_emb_extra[:, :, None, :]), dim=-2)
+        dst_emb = torch.cat((dst_emb, dst_emb_extra[:, :, None, :]), dim=-2)
 
         src_emb = self.encode_feat(self.src_feat_encode_layers, src_emb)
-        src_emb = self.encode_seq(self.src_encode_layers, src_emb, src_mask, self.base_code_src)
+        src_emb = self.encode_seq(
+            self.src_encode_layers, src_emb, src_mask, self.base_code_src)
         
         dst_emb = self.encode_feat(self.dst_feat_encode_layers, dst_emb)
-        dst_emb = self.encode_seq(self.dst_encode_layers, dst_emb, dst_mask, self.base_code_dst)
+        dst_emb = self.encode_seq(
+            self.dst_encode_layers, dst_emb, dst_mask, self.base_code_dst)
 
         edge_emb = self.edge_feat_emb(edge_feat).sum(dim=-2)
         # edge_emb: [B, H]

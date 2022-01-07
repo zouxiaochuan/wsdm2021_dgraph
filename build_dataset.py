@@ -17,6 +17,7 @@ import pandas as pd
 import constants
 import json
 import importlib
+import sqlite3
 
 
 global_data = None
@@ -182,6 +183,7 @@ def get_history_edges_node(
         index, eid, 1, src_nodes, dst_nodes, timestamps, max_num)
 
     return src_history_edges, dst_history_edges
+
 
 def reorder_feature(idmap, data, default=-1):
     ids = data[:, 0]
@@ -448,7 +450,6 @@ def build_index_val(config, prefix):
         node_last_eid = pickle.load(fin)
         pass
 
-
     index = -np.ones((len(src_nodes), 4), dtype='int32')
 
     for i in range(len(src_nodes)):
@@ -524,21 +525,138 @@ def build_index_node(output_folder, eids, src_nodes, dst_nodes):
     pass
 
 
+def build_index_sqlite(
+        config, eids, src_nodes, dst_nodes, edge_types, timestamps):
+    output_folder = config['dataset_path']
+
+    conn = sqlite3.connect(os.path.join(output_folder, 'data.sqlite'))
+
+    conn.executescript(
+        '''
+        drop table if exists edges;
+        create table edges(
+          eid integer,
+          src_node integer,
+          dst_node integer,
+          edge_type integer,
+          timestamp integer);
+        ''')
+    conn.commit()
+
+    # eids = eids[:100]
+    # dst_nodes = dst_nodes[:100]
+    # src_nodes = src_nodes[:100]
+    # edge_types = edge_types[:100]
+    # timestamps = timestamps[:100]
+    # 
+    # print(timestamps)
+    # print(edge_types)
+    conn.executemany(
+        '''
+        insert into edges values(?, ?, ?, ?, ?)
+        ''',
+        tqdm((tuple(int(i) for i in rec) for rec in
+              zip(eids, src_nodes, dst_nodes, edge_types, timestamps)),
+             total=len(eids)))
+    conn.commit()
+
+    conn.executescript(
+        '''
+        create index index_timestamp on edges(timestamp);
+        create index index_ts_snode on edges(timestamp, src_node);
+        create index index_ts_dnode on edges(timestamp, dst_node);
+        create index index_pair on edges(timestamp, src_node, dst_node);
+        create index index_trip on edges(timestamp, src_node, dst_node, edge_type);
+        create index index_snode_ts on edges(src_node, timestamp);
+        create index index_dnode_ts on edges(dst_node, timestamp);
+        create index index_pair_ts on edges(src_node, dst_node, timestamp);
+        create index index_trip_ts on edges(src_node, dst_node, edge_type, timestamp);
+
+        '''
+    )
+    conn.commit()
+    pass
+
+
+def array2struct_array(arr):
+    num = arr.shape[1]
+    arr = [tuple(i) for i in arr]
+    arr = np.ascontiguousarray(
+        np.array(arr, np.dtype([(f'f{i}', 'int32') for i in range(num)])))
+
+    sort_idx = np.argsort(arr, kind='stable')
+
+    arr = arr[sort_idx]
+
+    sort_idx = sort_idx.astype('int32')
+    return arr, sort_idx
+
+
+def build_index_search(
+        config, eids, src_nodes, dst_nodes, edge_types, timestamps):
+    output_folder = config['dataset_path']
+
+    trip_search_index = np.vstack(
+        (src_nodes, dst_nodes, edge_types, timestamps)).T
+    trip_search_index, trip_search_index_map = array2struct_array(
+        trip_search_index)
+    
+    np.save(os.path.join(output_folder, 'trip_search_index.npy'),
+            trip_search_index)
+    np.save(os.path.join(output_folder, 'trip_search_index_map.npy'),
+            trip_search_index_map)
+
+    pair_search_index = np.vstack((src_nodes, dst_nodes, timestamps)).T
+    pair_search_index, pair_search_index_map = array2struct_array(
+        pair_search_index)
+    
+    np.save(os.path.join(output_folder, 'pair_search_index.npy'),
+            pair_search_index)
+    np.save(os.path.join(output_folder, 'pair_search_index_map.npy'),
+            pair_search_index_map)
+
+    src_node_search_index = np.vstack((src_nodes, timestamps)).T
+    src_node_search_index, src_node_search_index_map = array2struct_array(
+        src_node_search_index)
+
+    np.save(os.path.join(output_folder, 'src_node_search_index.npy'),
+            src_node_search_index)
+    np.save(os.path.join(output_folder, 'src_node_search_index_map.npy'),
+            src_node_search_index_map)
+
+    dst_node_search_index = np.vstack((dst_nodes, timestamps)).T
+    dst_node_search_index, dst_node_search_index_map = array2struct_array(
+        dst_node_search_index)
+    
+    np.save(os.path.join(output_folder, 'dst_node_search_index.npy'),
+            dst_node_search_index)
+    np.save(os.path.join(output_folder, 'dst_node_search_index_map.npy'),
+            dst_node_search_index_map)
+
+    pass
+    
 def build_index(config):
     output_folder = config['dataset_path']
     eids = np.load(os.path.join(output_folder, 'eids.npy'))
     src_nodes = np.load(os.path.join(output_folder, 'src_nodes.npy'))
     dst_nodes = np.load(os.path.join(output_folder, 'dst_nodes.npy'))
     edge_types = np.load(os.path.join(output_folder, 'edge_types.npy'))
+    timestamps = np.load(os.path.join(output_folder, 'timestamps.npy'))
 
-    build_index_triplet(output_folder, eids, src_nodes, dst_nodes, edge_types)
-    build_index_triplet_bilateral(
-        output_folder, eids, src_nodes, dst_nodes, edge_types)
-    build_index_pair(output_folder, eids, src_nodes, dst_nodes)
-    build_index_node(output_folder, eids, src_nodes, dst_nodes)
+    # build_index_triplet(output_folder, eids, src_nodes, dst_nodes, edge_types)
+    # build_index_triplet_bilateral(
+    #     output_folder, eids, src_nodes, dst_nodes, edge_types)
+    # build_index_pair(output_folder, eids, src_nodes, dst_nodes)
+    # build_index_node(output_folder, eids, src_nodes, dst_nodes)
+    # 
+    # build_index_val(config, 'val')
+    # build_index_val(config, 'test')
 
-    build_index_val(config, 'val')
-    build_index_val(config, 'test')
+    # build_index_sqlite(
+    #     config, eids, src_nodes, dst_nodes, edge_types, timestamps)
+
+    build_index_search(
+        config, eids, src_nodes, dst_nodes, edge_types, timestamps)
     pass
 
 
@@ -797,13 +915,11 @@ def build_dataset(config):
     
     os.makedirs(output_folder, exist_ok=True)
     train_folder = os.path.join(output_folder, 'data')
-    other_folder = os.path.join(output_folder, 'data')
     os.makedirs(train_folder, exist_ok=True)
-    os.makedirs(other_folder, exist_ok=True)
 
     # build_dataset_numpy(config)
     build_index(config)
-    build_point_data(config)
+    # build_point_data(config)
 
     pass
 

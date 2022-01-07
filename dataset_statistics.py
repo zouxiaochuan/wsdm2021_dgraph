@@ -16,7 +16,7 @@ def ts2dt(ts):
 def every_day_count(config):
     cnts = defaultdict(int)
     df = pd.read_csv(config['train_file'], header=None)
-    data = df[[0,1,2,3]].values
+    data = df[[0, 1, 2, 3]].values
 
     ts = data[:, -1]
 
@@ -56,9 +56,11 @@ def check_bilateral(config):
     print(count)
     print(count / len(data))
 
+    pass
 
-def test_dts(config):
-    df = pd.read_csv(config['test_file'], header=None)
+
+def test_dts_single(filename):
+    df = pd.read_csv(filename, header=None)
     data = df.values
     ts1 = data[:, -2]
     ts2 = data[:, -1]
@@ -69,6 +71,13 @@ def test_dts(config):
     print(sorted(list(set(dt1+dt2))))
     pass
 
+
+def test_dts(config):
+    print('val:')
+    test_dts_single(config['val_file'])
+    print('test:')
+    test_dts_single(config['test_file'])
+    pass
 
 def test_interval(test_file):
     data = pd.read_csv(test_file).values
@@ -222,7 +231,8 @@ def check_duplicate():
     print(np.max(list(counts2.values())))
 
 
-def check_test_new(config):
+def check_test_new_node(config):
+    # check if test sample existed in the training set
     data_train = pd.read_csv(config['train_file'], header=None)[[0, 1, 2, 3]].values
     data_val = pd.read_csv(config['val_file'], header=None).values
     data_test = pd.read_csv(config['test_file'], header=None).values
@@ -250,14 +260,120 @@ def check_test_new(config):
     pass
 
 
+def check_test_new_trip(config):
+    data_train = pd.read_csv(config['train_file'], header=None)[[0, 1, 2, 3]].values
+    data_val = pd.read_csv(config['val_file'], header=None).values
+    data_test = pd.read_csv(config['test_file'], header=None).values
+
+    train_nodes = set([tuple(sorted((s, d))) + (t,) for s, d, t in data_train[:, 0:3]])
+    val_nodes = set([tuple(sorted((s, d))) + (t,) for s, d, t in data_val[:, 0:3]])
+    test_nodes = set([tuple(sorted((s, d))) + (t,) for s, d, t in data_test[:, 0:3]])
+
+    cnt = 0
+    for v in val_nodes:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('val: {0}'.format(cnt / len(val_nodes)))
+
+    cnt = 0
+    for v in test_nodes:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('test: {0}'.format(cnt / len(test_nodes)))
+
+    
+def check_test_new_trip2(config):
+    data_train = pd.read_csv(config['train_file'], header=None)[[0, 1, 2, 3]].values
+    data_val = pd.read_csv(config['val_file'], header=None).values
+
+    train_nodes = set([tuple(sorted((s, d))) + (t,) for s, d, t in data_train[:, 0:3]])
+    val_nodes_neg = set([tuple(sorted((s, d))) + (t,) for s, d, t, _, _, l in data_val
+                         if l == 0])
+    val_nodes_pos = set([tuple(sorted((s, d))) + (t,) for s, d, t, _, _, l in data_val
+                         if l == 1])
+
+    cnt = 0
+    for v in val_nodes_neg:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('val neg: {0}'.format(cnt / len(val_nodes_neg)))
+
+    cnt = 0
+    for v in val_nodes_pos:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('val pos: {0}'.format(cnt / len(val_nodes_pos)))
+
+    
+def check_test_new_pair2(config):
+    data_train = pd.read_csv(config['train_file'], header=None)[[0, 1, 2, 3]].values
+    data_val = pd.read_csv(config['val_file'], header=None).values
+
+    train_nodes = set([tuple(sorted((s, d))) for s, d in data_train[:, 0:2]])
+    val_nodes_neg = set([tuple(sorted((s, d))) for s, d, t, _, _, l in data_val
+                         if l == 0])
+    val_nodes_pos = set([tuple(sorted((s, d))) for s, d, t, _, _, l in data_val
+                         if l == 1])
+
+    cnt = 0
+    for v in val_nodes_neg:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('val neg: {0}'.format(cnt / len(val_nodes_neg)))
+
+    cnt = 0
+    for v in val_nodes_pos:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('val pos: {0}'.format(cnt / len(val_nodes_pos)))
+
+    
+def check_test_new_pair(config):
+    data_train = pd.read_csv(config['train_file'], header=None)[[0, 1, 2, 3]].values
+    data_val = pd.read_csv(config['val_file'], header=None).values
+    data_test = pd.read_csv(config['test_file'], header=None).values
+
+    train_nodes = set([tuple(sorted((s, d))) for s, d in data_train[:, 0:2]])
+    val_nodes = set([tuple(sorted((s, d))) for s, d in data_val[:, 0:2]])
+    test_nodes = set([tuple(sorted((s, d))) for s, d in data_test[:, 0:2]])
+
+    cnt = 0
+    for v in val_nodes:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('val: {0}'.format(cnt / len(val_nodes)))
+
+    cnt = 0
+    for v in test_nodes:
+        if v not in train_nodes:
+            cnt += 1
+            pass
+        pass
+    print('test: {0}'.format(cnt / len(test_nodes)))
+
+
+
 if __name__ == '__main__':
     config_file = sys.argv[1]
     config = importlib.import_module(config_file).config
 
-    
     # every_day_count(config_b)
     # check_self2self()
-    # test_dts(config_b)
+    # test_dts(config)
     # test_train_interval('../data_set/edges_train_A.csv', '../input_A.csv')
     # train_interval(config_a)
     # test_interval('../input_A.csv')
@@ -265,5 +381,6 @@ if __name__ == '__main__':
     # hot_point()
     # check_duplicate()
     # check_bilateral(config_b)
-    check_test_new(config)
+    check_test_new_trip2(config)
+    check_test_new_pair2(config)
     pass

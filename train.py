@@ -35,7 +35,9 @@ class ModelLightning(pyl.LightningModule):
             batch['dst_feat'],
             batch['dst_mask'],
             batch['trip_feat_extra_b'],
-            batch['pair_feat_extra_b']
+            batch['pair_feat_extra_b'],
+            batch['src_feat_extra_b'],
+            batch['dst_feat_extra_b']
         )
         return x
         
@@ -133,7 +135,6 @@ class ModelLightning(pyl.LightningModule):
         proba = 1 - torch.prod(1 - proba * label_weights, dim=-1)
         # proba = (proba * label_weights).max(dim=-1)[0]
         
-        
         return proba.cpu().numpy().flatten()
 
     pass
@@ -146,8 +147,10 @@ if __name__ == '__main__':
     config = importlib.import_module(config_file).config
     backbone = models.HierarchicalTransformer(config)
 
-    dataset_train = datasets.DygDataset(config, 'valid_train')
-    dataset_valid = datasets.DygDataset(config, 'valid_test', valid_percent=0.005)
+    dataset_train = datasets.DygDataset(
+        config, 'valid_train', valid_percent=0.01, num=50000)
+    dataset_valid = datasets.DygDataset(
+        config, 'valid_test', valid_percent=0.01, num=50000)
 
     loader_train = torch.utils.data.DataLoader(
         dataset=dataset_train,
@@ -155,14 +158,14 @@ if __name__ == '__main__':
         shuffle=False,
         num_workers=config['num_data_workers'],
         collate_fn=datasets.dyg_collate_fn,
-        sampler=datasets.RandomDropSampler(dataset_train, 0.95)
+        # sampler=datasets.RandomDropSampler(dataset_train, 0.999)
         )
     loader_valid = torch.utils.data.DataLoader(
         dataset=dataset_valid,
         batch_size=config['batch_size'],
         shuffle=False,
         num_workers=config['num_data_workers'],
-        collate_fn=datasets.dyg_collate_fn
+        collate_fn=datasets.dyg_collate_fn,
         )
 
     model = ModelLightning(

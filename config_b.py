@@ -9,11 +9,12 @@ num_nodes = 811985
 
 config = {
     'train_file': '../data_set/edges_train_B.csv',
-    'val_file': '../input_B_initial.csv',
-    'test_file': '../input_B.csv',
+    'val_file': '../data_set/input_B_initial.csv',
+    'test_file': '../data_set/input_B.csv',
     'dataset_path': '../dataset_B',
     'neg_sample_interval': 60 * 24 * 60 * 60,
     'neg_sample_num': 127,
+    'neg_sample_proba': 0.5,
     'train_start': '20150301',
     'max_train_ts': 1443628799,
     'label_bin_size': 60 * 60,
