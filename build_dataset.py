@@ -634,7 +634,8 @@ def build_index_search(
             dst_node_search_index_map)
 
     pass
-    
+
+
 def build_index(config):
     output_folder = config['dataset_path']
     eids = np.load(os.path.join(output_folder, 'eids.npy'))
@@ -643,14 +644,14 @@ def build_index(config):
     edge_types = np.load(os.path.join(output_folder, 'edge_types.npy'))
     timestamps = np.load(os.path.join(output_folder, 'timestamps.npy'))
 
-    # build_index_triplet(output_folder, eids, src_nodes, dst_nodes, edge_types)
-    # build_index_triplet_bilateral(
-    #     output_folder, eids, src_nodes, dst_nodes, edge_types)
-    # build_index_pair(output_folder, eids, src_nodes, dst_nodes)
-    # build_index_node(output_folder, eids, src_nodes, dst_nodes)
-    # 
-    # build_index_val(config, 'val')
-    # build_index_val(config, 'test')
+    build_index_triplet(output_folder, eids, src_nodes, dst_nodes, edge_types)
+    build_index_triplet_bilateral(
+        output_folder, eids, src_nodes, dst_nodes, edge_types)
+    build_index_pair(output_folder, eids, src_nodes, dst_nodes)
+    build_index_node(output_folder, eids, src_nodes, dst_nodes)
+    
+    build_index_val(config, 'val')
+    build_index_val(config, 'test')
 
     # build_index_sqlite(
     #     config, eids, src_nodes, dst_nodes, edge_types, timestamps)
@@ -917,9 +918,8 @@ def build_dataset(config):
     train_folder = os.path.join(output_folder, 'data')
     os.makedirs(train_folder, exist_ok=True)
 
-    # build_dataset_numpy(config)
+    build_dataset_numpy(config)
     build_index(config)
-    # build_point_data(config)
 
     pass
 

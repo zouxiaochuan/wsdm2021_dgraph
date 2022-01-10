@@ -33,7 +33,7 @@ if __name__ == '__main__':
         )
 
     trainer = pyl.Trainer(
-        gpus=1
+        gpus=[2]
     )
 
     with torch.no_grad():

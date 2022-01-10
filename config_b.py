@@ -13,7 +13,7 @@ config = {
     'test_file': '../data_set/input_B.csv',
     'dataset_path': '../dataset_B',
     'neg_sample_interval': 60 * 24 * 60 * 60,
-    'neg_sample_num': 127,
+    'neg_sample_num': 64,
     'neg_sample_proba': 0.5,
     'train_start': '20150301',
     'max_train_ts': 1443628799,
@@ -22,10 +22,10 @@ config = {
     'extra_feat_dim': 768,
     'trip_feat_dim': constants.TE_FEAT_DIM.tolist(),
     'pair_feat_dim': np.concatenate((constants.TE_FEAT_DIM, [num_edge_type], [2])).tolist(),
-    'label_feat_dim': [max_label_class, constants.NUM_WEEKDAY, constants.MAX_TE_DAYS_DIFF, 24],
+    'label_feat_dim': [max_label_class, constants.NUM_WEEKDAY,
+                       constants.MAX_TE_DAYS_DIFF, constants.NUM_HOUR],
     # 'label_feat_dim': [max_label_class],
     'max_label_class': max_label_class,
-    'pair_edge_feat_num': 0,
     'node_history_feat_dim': np.concatenate((constants.TE_FEAT_DIM, [num_nodes, num_edge_type, 2, 2])).tolist(),
 
 
@@ -41,8 +41,8 @@ config = {
     'hidden_dropout_prob': 0,
     'attention_probs_dropout_prob': 0,
 
-    'gpus': 8,
-    'accelerator': 'ddp'
+    'gpus': [7],
+    'accelerator': None
     
 }
 

@@ -32,9 +32,10 @@ class DygDataset(torch.utils.data.Dataset):
 
         while True:
             choose_change_idx = np.random.choice(3)
-            choice_nums = [self.num_nodes, self.num_nodes, self.num_edge_types]
+            choices = [self.uniq_src_nodes, self.uniq_dst_nodes,
+                       self.num_edge_types]
             current_sample[choose_change_idx] = np.random.choice(
-                choice_nums[choose_change_idx])
+                choices[choose_change_idx])
         
             point_data = point_data_utils.get_point_data(
                 current_sample, self.src_nodes, self.dst_nodes, self.edge_types,
@@ -85,7 +86,7 @@ class DygDataset(torch.utils.data.Dataset):
         past_nodes = set()
         is_new_node = np.zeros(len(self.src_nodes), dtype='bool')
         for eid, (snode, dnode) in enumerate(
-                zip(self.src_nodes, self.dst_nodes)):
+                zip(self.src_nodes, tqdm(self.dst_nodes))):
             if snode not in past_nodes or dnode not in past_nodes:
                 is_new_node[eid] = True
                 pass
@@ -178,6 +179,9 @@ class DygDataset(torch.utils.data.Dataset):
         self.split = split
 
         self.num = num
+
+        self.uniq_src_nodes = np.unique(self.src_nodes)
+        self.uniq_dst_nodes = np.unique(self.dst_nodes)
         pass
 
     def encode_history_edges(self, edges, current_ts):
@@ -360,8 +364,8 @@ class DygDataset(torch.utils.data.Dataset):
         else:
             trip_feat_extra_b = np.zeros((len(history_edges_trip), 1), dtype='float32')
             pair_feat_extra_b = np.zeros((len(history_edges_pair), 1), dtype='float32')
-            src_feat_extra_b = np.zeros((len(history_edges_pair), 1), dtype='float32')
-            dst_feat_extra_b = np.zeros((len(history_edges_pair), 1), dtype='float32')
+            src_feat_extra_b = np.zeros((len(history_edges_src), 1), dtype='float32')
+            dst_feat_extra_b = np.zeros((len(history_edges_dst), 1), dtype='float32')
             pass
                     
         pair_feat = self.encode_history_edges(
@@ -419,10 +423,6 @@ class DygDatasetTest(DygDataset):
         super().__init__(config, 'train')
 
         folder = config['dataset_path']
-        filename = split + '_data.tar'
-        self.tar_file = tarfile.open(os.path.join(
-            config['dataset_path'], filename), 'r')
-        self.names = self.tar_file.getnames()
 
         self.test_src_nodes = np.load(
             os.path.join(folder, f'{split}_src_nodes.npy'))
@@ -439,34 +439,37 @@ class DygDatasetTest(DygDataset):
         pass
 
     def get_point_data(self, idx) -> PointDataTest:
-        name = self.names[idx]
-        fin = self.tar_file.extractfile(name)
-        return pickle.load(fin)
-
-    def get_edge_feat(self, idx):
-        if 'node_feat_file' in self.config:
-            src_node = self.test_src_nodes[idx]
-            dst_node = self.test_dst_nodes[idx]
-            edge_type = self.test_edge_types[idx]
-            src_feat = self.node_feat[src_node] + 1 # 1 for -1
-            dst_feat = self.node_feat[dst_node] + 1
-            edge_type_feat = self.edge_type_feat[edge_type] + 1
-
-            edge_feat = np.hstack((src_feat, dst_feat, edge_type_feat))
-            edge_feat = feat_utils.merge_category(
-                edge_feat, self.config['edge_feat_dim'])
-            pass
-        else:
-            edge_feat = np.zeros((1, 1), dtype='int64')
-            pass
+        src_node = self.test_src_nodes[idx]
+        dst_node = self.test_dst_nodes[idx]
+        edge_type = self.test_edge_types[idx]
         
-        return edge_feat
+        current_sample = [
+            src_node, dst_node, edge_type, self.config['max_train_ts']]
+        
+        point_data = point_data_utils.get_point_data(
+            current_sample, self.src_nodes, self.dst_nodes, self.edge_types,
+            self.timestamps, self.config, self.triplet_index,
+            self.triplet_index_bilateral, self.pair_index, self.node_index,
+            self.trip_search_index, self.trip_search_index_map,
+            self.pair_search_index, self.pair_search_index_map,
+            self.src_node_search_index, self.src_node_search_index_map,
+            self.dst_node_search_index, self.dst_node_search_index_map)
+
+        point_data_test = PointDataTest(
+            src_node, dst_node, edge_type, point_data.max_history_ts,
+            point_data.history_edges_triplet, point_data.history_edges_pair,
+            point_data.history_edges_src, point_data.history_edges_dst,
+            self.test_start_timestamps[idx],
+            self.test_end_timestamps[idx])
+        
+        return point_data_test
     
     def __getitem__(self, idx):        
         config = self.config
 
         point_data = self.get_point_data(idx)
-        edge_feat = self.get_edge_feat(idx)
+        edge_feat = self.get_edge_feat(point_data.src_node, point_data.dst_node,
+                                       point_data.edge_type)
         history_edges_trip = point_data.history_edges_triplet
         history_edges_pair = point_data.history_edges_pair
         history_edges_src = point_data.history_edges_src
@@ -475,47 +478,52 @@ class DygDatasetTest(DygDataset):
         start_ts = self.test_start_timestamps[idx]
         end_ts = self.test_end_timestamps[idx]
 
-        max_history_ts = self.get_max_history_ts(
-            history_edges_trip,
-            history_edges_pair,
-            history_edges_src,
-            history_edges_dst,            
-            start_ts)
-
+        max_history_ts = point_data.max_history_ts
         trip_feat = self.encode_history_edges(
             history_edges_trip,
             max_history_ts)
-        trip_feat = feat_utils.merge_category(trip_feat, config['trip_feat_dim'])
         
+        trip_feat = feat_utils.merge_category(
+            trip_feat, config['trip_feat_dim'])
+
+        if 'node_feat_file' not in self.config:
+            trip_feat_extra_b = self.get_history_edge_feat_b(
+                history_edges_trip)
+            pair_feat_extra_b = self.get_history_edge_feat_b(
+                history_edges_pair)
+            src_feat_extra_b = self.get_history_edge_feat_b(
+                history_edges_src)
+            dst_feat_extra_b = self.get_history_edge_feat_b(
+                history_edges_dst)
+            pass
+        else:
+            trip_feat_extra_b = np.zeros((len(history_edges_trip), 1), dtype='float32')
+            pair_feat_extra_b = np.zeros((len(history_edges_pair), 1), dtype='float32')
+            src_feat_extra_b = np.zeros((len(history_edges_src), 1), dtype='float32')
+            dst_feat_extra_b = np.zeros((len(history_edges_dst), 1), dtype='float32')
+            pass
+                    
         pair_feat = self.encode_history_edges(
             history_edges_pair,
             max_history_ts)
 
         pair_feat_extra = self.get_pair_feat_extra(
-            self.test_edge_types[idx], history_edges_pair)
+            point_data.edge_type, history_edges_pair)
 
         pair_feat = np.concatenate(
             (pair_feat, pair_feat_extra),
             axis=-1)
 
-        pair_feat = feat_utils.merge_category(pair_feat, config['pair_feat_dim'])
-
-        if 'node_feat_file' not in self.config:
-            trip_feat_extra_b = torch.from_numpy(self.get_history_edge_feat_b(history_edges_trip))
-            pair_feat_extra_b = torch.from_numpy(self.get_history_edge_feat_b(history_edges_pair))
-            pass
-        else:
-            trip_feat_extra_b = torch.zeros((len(history_edges_trip), 1))
-            pair_feat_extra_b = torch.zeros((len(history_edges_pair), 1))
-            pass
+        pair_feat = feat_utils.merge_category(
+            pair_feat, config['pair_feat_dim'])
 
         src_feat = self.encode_node_history_edges(
-            history_edges_src, max_history_ts, self.test_edge_types[idx],
-            self.test_dst_nodes[idx])
+            history_edges_src, max_history_ts, point_data.edge_type,
+            point_data.dst_node)
         dst_feat = self.encode_node_history_edges(
-            history_edges_dst, max_history_ts, self.test_edge_types[idx],
-            self.test_src_nodes[idx])
-
+            history_edges_dst, max_history_ts, point_data.edge_type,
+            point_data.src_node)
+        
         label_bins, label_weights = label_utils.get_predict_bins(
             start_ts, end_ts, config['label_bin_size'])
         label_feat = feat_utils.get_label_feat(
@@ -533,9 +541,10 @@ class DygDatasetTest(DygDataset):
             'trip_feat': torch.from_numpy(trip_feat),
             'pair_feat': torch.from_numpy(pair_feat),
             'label_feat': torch.from_numpy(label_feat),
-            'trip_feat_extra_b': trip_feat_extra_b,
-            'pair_feat_extra_b': pair_feat_extra_b,
-            'src_feat_extra_b': src_feat_extra_b,
+            'trip_feat_extra_b': torch.from_numpy(trip_feat_extra_b),
+            'pair_feat_extra_b': torch.from_numpy(pair_feat_extra_b),
+            'src_feat_extra_b': torch.from_numpy(src_feat_extra_b),
+            'dst_feat_extra_b': torch.from_numpy(dst_feat_extra_b),
             'src_feat': torch.from_numpy(src_feat),
             'dst_feat': torch.from_numpy(dst_feat),
 
@@ -543,8 +552,7 @@ class DygDatasetTest(DygDataset):
         }
 
     def __len__(self):
-        # return len(self.names)
-        return 1000
+        return len(self.test_src_nodes)
     pass
 
 
@@ -622,6 +630,8 @@ def dyg_test_collate_fn(batch):
 
     trip_feat_extra_b, _ = collate_seq([b['trip_feat_extra_b'] for b in batch])
     pair_feat_extra_b, _ = collate_seq([b['pair_feat_extra_b'] for b in batch])
+    src_feat_extra_b, _ = collate_seq([b['src_feat_extra_b'] for b in batch])
+    dst_feat_extra_b, _ = collate_seq([b['dst_feat_extra_b'] for b in batch])
 
     src_feat, src_mask = collate_seq([b['src_feat'] for b in batch])
     dst_feat, dst_mask = collate_seq([b['dst_feat'] for b in batch])
@@ -639,6 +649,8 @@ def dyg_test_collate_fn(batch):
         'pair_mask': pair_mask,
         'trip_feat_extra_b': trip_feat_extra_b,
         'pair_feat_extra_b': pair_feat_extra_b,
+        'src_feat_extra_b': src_feat_extra_b,
+        'dst_feat_extra_b': dst_feat_extra_b,
         'src_feat': src_feat,
         'dst_feat': dst_feat,
         'src_mask': src_mask,
