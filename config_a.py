@@ -44,7 +44,7 @@ config = {
     'num_hidden_layers_feat': 2,
     'batch_size': 64,
     'learning_rate': 0.0001,
-    'num_data_workers': 0,
+    'num_data_workers': 8,
     'hidden_dropout_prob': 0,
     'attention_probs_dropout_prob': 0,
 

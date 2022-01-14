@@ -50,7 +50,7 @@ def search_tuple(t, search_index, search_index_map, shift=-1):
 
     idx = np.searchsorted(search_index, v, side='right') + shift
 
-    if t[:-1] != tuple(search_index[idx])[:-1]:
+    if idx == len(search_index) or t[:-1] != tuple(search_index[idx])[:-1]:
         return None
     else:
         return search_index_map[idx]

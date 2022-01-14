@@ -41,8 +41,8 @@ config = {
     'hidden_dropout_prob': 0,
     'attention_probs_dropout_prob': 0,
 
-    'gpus': [7],
-    'accelerator': None
+    'gpus': [3,4,5,6,7],
+    'accelerator': 'ddp'
     
 }
 

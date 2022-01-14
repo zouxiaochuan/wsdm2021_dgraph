@@ -54,7 +54,7 @@ class ModelLightning(pyl.LightningModule):
             logits, batch['label'], reduction='none')
 
         loss = torch.mean(loss * batch['label_mask'])
-        self.log("loss2", loss, on_step=True, prog_bar=True, logger=False)
+        # self.log("loss2", loss, on_step=True, prog_bar=True, logger=False)
         
         return loss
     
@@ -88,8 +88,9 @@ class ModelLightning(pyl.LightningModule):
         #     self.optimizers(0).param_groups[0]['lr'] *= 0.5
         #     pass
 
-        self.log('valid loss', acc, sync_dist=True)
-        self.log('learning rate', self.optimizers(0).param_groups[0]['lr'])
+        self.log('valid loss', acc, sync_dist=True, rank_zero_only=True)
+        self.log('learning rate', self.optimizers(0).param_groups[0]['lr'],
+                 rank_zero_only=True)
         pass
 
     def configure_optimizers(self):
